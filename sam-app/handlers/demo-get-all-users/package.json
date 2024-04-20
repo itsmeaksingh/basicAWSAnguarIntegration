@@ -1,0 +1,11 @@
+{
+  "name": "demo-get-all-users",
+  "version": "1.0.0",
+  "description": "demo get all users",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC"
+}

@@ -1,0 +1,11 @@
+{
+  "name": "demo-delete-user",
+  "version": "1.0.0",
+  "description": "demo delete user",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC"
+}

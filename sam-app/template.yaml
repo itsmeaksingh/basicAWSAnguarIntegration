@@ -2,6 +2,7 @@ AWSTemplateFormatVersion: "2010-09-09"
 Description: sam-app CRUD APP
 Transform:
   - AWS::Serverless-2016-10-31
+
 Parameters:
   Environment:
     Type: String
@@ -12,12 +13,10 @@ Parameters:
       - develop
       - stage
       - prod
-  TableName:
-    Type: String
-    Description: DynamoDb Table Name
   LambdaRoleArn:
     Type: String
     Description: Lambda Role with basic execution policy.
+
 Mappings:
   ApiGateway:
     respTempl:
@@ -64,7 +63,20 @@ Mappings:
   Lambdas:
     getAllUsersServices:
       version: 1.0.0
-      name: get-all-users
+      name: demo-get-all-users
+    getUserService:
+      version: 1.0.0
+      name: demo-get-user
+    createUserService:
+      version: 1.0.0
+      name: demo-create-user
+    updateUserService:
+      version: 1.0.0
+      name: demo-update-user
+    deleteUserService:
+      version: 1.0.0
+      name: demo-delete-user
+
 Resources:
   basicApiNew:
     Type: AWS::ApiGateway::RestApi
@@ -77,6 +89,8 @@ Resources:
             - !Ref Environment
       Description: API used for Custom requests
       FailOnWarnings: true
+
+  # Get All Users Resource
   getAllUsersServicesLambda:
     Type: AWS::Serverless::Function
     Properties:
@@ -149,7 +163,7 @@ Resources:
       Integration:
         Type: AWS
         IntegrationHttpMethod: POST
-        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${getAllUsersServicesLambda.Arn}/invocations"
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${getAllUsersServicesLambda.Arn}/invocations
         IntegrationResponses:
           - StatusCode: 200
             SelectionPattern: "-"
@@ -160,7 +174,10 @@ Resources:
             ResponseParameters:
               method.response.header.Access-Control-Allow-Origin: "'*'"
             ResponseTemplates:
-              application/json: !FindInMap [ApiGateway, respTempl, error]
+              application/json: !FindInMap
+                - ApiGateway
+                - respTempl
+                - error
           - StatusCode: 500
             SelectionPattern: (\n|.)+
             ResponseParameters:
@@ -169,9 +186,12 @@ Resources:
               application/json: !Sub '{"error" : "Process exited before completing request."}'
         PassthroughBehavior: WHEN_NO_TEMPLATES
         RequestTemplates:
-          application/json: !FindInMap [ApiGateway, reqTempl, default]
-      ResourceId: !Ref "getAllUsersServicesResource"
-      RestApiId: !Ref "basicApiNew"
+          application/json: !FindInMap
+            - ApiGateway
+            - reqTempl
+            - default
+      ResourceId: !Ref getAllUsersServicesResource
+      RestApiId: !Ref basicApiNew
       MethodResponses:
         - StatusCode: 200
           ResponseParameters:
@@ -187,11 +207,519 @@ Resources:
     DependsOn: getAllUsersServicesPermissions
   getAllUsersServicesPermissions:
     Type: AWS::Lambda::Permission
+    DependsOn:
+      - basicApiNew
+      - getAllUsersServicesLambda
     Properties:
       Action: lambda:invokeFunction
       FunctionName: !GetAtt getAllUsersServicesLambda.Arn
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${basicApiNew}/*/*/*
+
+  # Get One User Resource
+  getUserServiceLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: index.handler
+      Runtime: nodejs16.x
+      Architectures:
+        - x86_64
+      FunctionName: !Sub
+        - ${FunctionName}
+        - FunctionName: !FindInMap
+            - Lambdas
+            - getUserService
+            - name
+      Role: !Ref LambdaRoleArn
+      CodeUri: !Sub
+        - handlers/${FunctionName}/
+        - FunctionName: !FindInMap
+            - Lambdas
+            - getUserService
+            - name
+      MemorySize: 128
+      Timeout: 100
+      Description: A simple example includes a HTTP get method to get one items from a DynamoDB table.
+      Environment:
+        Variables:
+          SAMPLE_TABLE: !Ref SampleTable
+  getUserServiceResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref basicApiNew
+      ParentId: !GetAtt basicApiNew.RootResourceId
+      PathPart: getUser
+    DependsOn:
+      - basicApiNew
+  getUserServiceResourceOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: OPTIONS
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Methods: "'DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT'"
+              method.response.header.Access-Control-Allow-Headers: !FindInMap
+                - ApiGateway
+                - head
+                - integr
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      ResourceId: !Ref getUserServiceResource
+      RestApiId: !Ref basicApiNew
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+          ResponseModels:
+            application/json: Empty
+  getUserServiceResourceGetMethod:
+    Type: AWS::ApiGateway::Method
+    Metadata:
+      Path: /getUser
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: GET
+      Integration:
+        Type: AWS
+        IntegrationHttpMethod: POST
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${getUserServiceLambda.Arn}/invocations
+        IntegrationResponses:
+          - StatusCode: 200
+            SelectionPattern: "-"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+          - StatusCode: 400
+            SelectionPattern: .*"status":400.*
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: !FindInMap
+                - ApiGateway
+                - respTempl
+                - error
+          - StatusCode: 500
+            SelectionPattern: (\n|.)+
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: !Sub '{"error" : "Process exited before completing request."}'
+        PassthroughBehavior: WHEN_NO_TEMPLATES
+        RequestTemplates:
+          application/json: !FindInMap
+            - ApiGateway
+            - reqTempl
+            - default
+      ResourceId: !Ref getUserServiceResource
+      RestApiId: !Ref basicApiNew
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+          ResponseModels:
+            application/json: Empty
+        - StatusCode: 400
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+        - StatusCode: 500
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+    DependsOn: getUserServicePermissions
+  getUserServicePermissions:
+    Type: AWS::Lambda::Permission
+    DependsOn:
+      - basicApiNew
+      - getUserServiceLambda
+    Properties:
+      Action: lambda:invokeFunction
+      FunctionName: !GetAtt getUserServiceLambda.Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${basicApiNew}/*/*/*
+
+  # Create One User Resource
+  createUserServiceLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: index.handler
+      Runtime: nodejs16.x
+      Architectures:
+        - x86_64
+      FunctionName: !Sub
+        - ${FunctionName}
+        - FunctionName: !FindInMap
+            - Lambdas
+            - createUserService
+            - name
+      Role: !Ref LambdaRoleArn
+      CodeUri: !Sub
+        - handlers/${FunctionName}/
+        - FunctionName: !FindInMap
+            - Lambdas
+            - createUserService
+            - name
+      MemorySize: 128
+      Timeout: 100
+      Description: A simple example includes a HTTP POST method to Create one items from a DynamoDB table.
+      Environment:
+        Variables:
+          SAMPLE_TABLE: !Ref SampleTable
+  createUserServiceResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref basicApiNew
+      ParentId: !GetAtt basicApiNew.RootResourceId
+      PathPart: createUser
+    DependsOn:
+      - basicApiNew
+  createUserServiceResourceOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: OPTIONS
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Methods: "'DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT'"
+              method.response.header.Access-Control-Allow-Headers: !FindInMap
+                - ApiGateway
+                - head
+                - integr
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      ResourceId: !Ref createUserServiceResource
+      RestApiId: !Ref basicApiNew
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+          ResponseModels:
+            application/json: Empty
+  createUserServiceResourceGetMethod:
+    Type: AWS::ApiGateway::Method
+    Metadata:
+      Path: /createUser
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: POST
+      Integration:
+        Type: AWS
+        IntegrationHttpMethod: POST
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${createUserServiceLambda.Arn}/invocations
+        IntegrationResponses:
+          - StatusCode: 200
+            SelectionPattern: "-"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+          - StatusCode: 400
+            SelectionPattern: .*"status":400.*
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: !FindInMap
+                - ApiGateway
+                - respTempl
+                - error
+          - StatusCode: 500
+            SelectionPattern: (\n|.)+
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: !Sub '{"error" : "Process exited before completing request."}'
+        PassthroughBehavior: WHEN_NO_TEMPLATES
+        RequestTemplates:
+          application/json: !FindInMap
+            - ApiGateway
+            - reqTempl
+            - default
+      ResourceId: !Ref createUserServiceResource
+      RestApiId: !Ref basicApiNew
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+          ResponseModels:
+            application/json: Empty
+        - StatusCode: 400
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+        - StatusCode: 500
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+    DependsOn: createUserServicePermissions
+  createUserServicePermissions:
+    Type: AWS::Lambda::Permission
+    DependsOn:
+      - basicApiNew
+      - createUserServiceLambda
+    Properties:
+      Action: lambda:invokeFunction
+      FunctionName: !GetAtt createUserServiceLambda.Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${basicApiNew}/*/*/*
+
+  # update One User Resource
+  updateUserServiceLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: index.handler
+      Runtime: nodejs16.x
+      Architectures:
+        - x86_64
+      FunctionName: !Sub
+        - ${FunctionName}
+        - FunctionName: !FindInMap
+            - Lambdas
+            - updateUserService
+            - name
+      Role: !Ref LambdaRoleArn
+      CodeUri: !Sub
+        - handlers/${FunctionName}/
+        - FunctionName: !FindInMap
+            - Lambdas
+            - updateUserService
+            - name
+      MemorySize: 128
+      Timeout: 100
+      Description: A simple example includes a HTTP Patch method to update one items from a DynamoDB table.
+      Environment:
+        Variables:
+          SAMPLE_TABLE: !Ref SampleTable
+  updateUserServiceResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref basicApiNew
+      ParentId: !GetAtt basicApiNew.RootResourceId
+      PathPart: updateUser
+    DependsOn:
+      - basicApiNew
+  updateUserServiceResourceOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: OPTIONS
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Methods: "'DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT'"
+              method.response.header.Access-Control-Allow-Headers: !FindInMap
+                - ApiGateway
+                - head
+                - integr
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      ResourceId: !Ref updateUserServiceResource
+      RestApiId: !Ref basicApiNew
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+          ResponseModels:
+            application/json: Empty
+  updateUserServiceResourceGetMethod:
+    Type: AWS::ApiGateway::Method
+    Metadata:
+      Path: /updateUser
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: PUT
+      Integration:
+        Type: AWS
+        IntegrationHttpMethod: POST
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${updateUserServiceLambda.Arn}/invocations
+        IntegrationResponses:
+          - StatusCode: 200
+            SelectionPattern: "-"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+          - StatusCode: 400
+            SelectionPattern: .*"status":400.*
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: !FindInMap
+                - ApiGateway
+                - respTempl
+                - error
+          - StatusCode: 500
+            SelectionPattern: (\n|.)+
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: !Sub '{"error" : "Process exited before completing request."}'
+        PassthroughBehavior: WHEN_NO_TEMPLATES
+        RequestTemplates:
+          application/json: !FindInMap
+            - ApiGateway
+            - reqTempl
+            - default
+      ResourceId: !Ref updateUserServiceResource
+      RestApiId: !Ref basicApiNew
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+          ResponseModels:
+            application/json: Empty
+        - StatusCode: 400
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+        - StatusCode: 500
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+    DependsOn: updateUserServicePermissions
+  updateUserServicePermissions:
+    Type: AWS::Lambda::Permission
+    DependsOn:
+      - basicApiNew
+      - updateUserServiceLambda
+    Properties:
+      Action: lambda:invokeFunction
+      FunctionName: !GetAtt updateUserServiceLambda.Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${basicApiNew}/*/*/*
+
+  # Delete One User Resource
+  deleteUserServiceLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: index.handler
+      Runtime: nodejs16.x
+      Architectures:
+        - x86_64
+      FunctionName: !Sub
+        - ${FunctionName}
+        - FunctionName: !FindInMap
+            - Lambdas
+            - deleteUserService
+            - name
+      Role: !Ref LambdaRoleArn
+      CodeUri: !Sub
+        - handlers/${FunctionName}/
+        - FunctionName: !FindInMap
+            - Lambdas
+            - deleteUserService
+            - name
+      MemorySize: 128
+      Timeout: 100
+      Description: A simple example includes a HTTP Delete method to delete One items from a DynamoDB table.
+      Environment:
+        Variables:
+          SAMPLE_TABLE: !Ref SampleTable
+  deleteUserServiceResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref basicApiNew
+      ParentId: !GetAtt basicApiNew.RootResourceId
+      PathPart: deleteUser
+    DependsOn:
+      - basicApiNew
+  deleteUserServiceResourceOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: OPTIONS
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Methods: "'DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT'"
+              method.response.header.Access-Control-Allow-Headers: !FindInMap
+                - ApiGateway
+                - head
+                - integr
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      ResourceId: !Ref deleteUserServiceResource
+      RestApiId: !Ref basicApiNew
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+          ResponseModels:
+            application/json: Empty
+  deleteUserServiceResourceGetMethod:
+    Type: AWS::ApiGateway::Method
+    Metadata:
+      Path: /deleteUser
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: DELETE
+      Integration:
+        Type: AWS
+        IntegrationHttpMethod: POST
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${deleteUserServiceLambda.Arn}/invocations
+        IntegrationResponses:
+          - StatusCode: 200
+            SelectionPattern: "-"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+          - StatusCode: 400
+            SelectionPattern: .*"status":400.*
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: !FindInMap
+                - ApiGateway
+                - respTempl
+                - error
+          - StatusCode: 500
+            SelectionPattern: (\n|.)+
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: !Sub '{"error" : "Process exited before completing request."}'
+        PassthroughBehavior: WHEN_NO_TEMPLATES
+        RequestTemplates:
+          application/json: !FindInMap
+            - ApiGateway
+            - reqTempl
+            - default
+      ResourceId: !Ref deleteUserServiceResource
+      RestApiId: !Ref basicApiNew
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+          ResponseModels:
+            application/json: Empty
+        - StatusCode: 400
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+        - StatusCode: 500
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+    DependsOn: deleteUserServicePermissions
+  deleteUserServicePermissions:
+    Type: AWS::Lambda::Permission
+    DependsOn:
+      - basicApiNew
+      - deleteUserServiceLambda
+    Properties:
+      Action: lambda:invokeFunction
+      FunctionName: !GetAtt deleteUserServiceLambda.Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${basicApiNew}/*/*/*
+
   SampleTable:
     Type: AWS::Serverless::SimpleTable
     Properties:
