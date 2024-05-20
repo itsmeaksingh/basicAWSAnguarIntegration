@@ -4,6 +4,10 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
+  # Add a new event type to trigger the workflow when a LaunchDarkly webhook is received
+  repository_dispatch:
+    types: [launchdarkly_flag_change]
 
 jobs:
   deploy:
