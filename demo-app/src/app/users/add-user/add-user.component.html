@@ -1,0 +1,94 @@
+<div class="m-3">
+  <h1>Add User</h1>
+  <div class="container">
+    <form [formGroup]="userForm">
+      <div class="form-row mt-2">
+        <div class="form-group">
+          <label>Name<span class="text-danger">*</span></label>
+          <input
+            type="text"
+            class="form-control"
+            formControlName="name"
+            maxlength="50"
+          />
+          <div
+            class="text-danger"
+            *ngIf="
+              userForm.controls['name'].invalid &&
+              (userForm.controls['name'].dirty ||
+                userForm.controls['name'].touched)
+            "
+          >
+            <div *ngIf="userForm.controls['name'].hasError('required')">
+              Name is required.
+            </div>
+            <div *ngIf="userForm.controls['name'].hasError('minlength')">
+              Name should be more then 3 charactors
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-row mt-2">
+        <div class="form-group">
+          <label>Email<span class="text-danger">*</span></label>
+          <input type="text" class="form-control" formControlName="email" maxlength="100"/>
+          <div
+            class="text-danger"
+            *ngIf="
+              userForm.controls['email'].invalid &&
+              (userForm.controls['email'].dirty ||
+                userForm.controls['email'].touched)
+            "
+          >
+            <div *ngIf="userForm.controls['email'].hasError('required')">
+              Email is required.
+            </div>
+            <div *ngIf="userForm.controls['email'].hasError('email')">
+              Email must be a valid email address.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-row mt-2">
+        <div class="form-group">
+          <label class="form-lablel">Role<span class="text-danger">*</span></label>
+          <select class="form-select" formControlName="role">
+            <option value=""></option>
+            <option value="user">User</option>
+            <option value="admin">Admin</option>
+          </select>
+          <div
+            class="text-danger"
+            *ngIf="
+              userForm.controls['role'].invalid &&
+              (userForm.controls['role'].dirty ||
+                userForm.controls['role'].touched)
+            "
+          >
+            <div *ngIf="userForm.controls['role'].hasError('required')">
+              Role is required.
+            </div>
+          </div>
+        </div>
+      </div>
+    </form>
+
+    <div class="form-row mt-4">
+      <div class="form-group">
+        <button
+          class="me-3"
+          mat-flat-button
+          color="warn"
+          mat-dialog-close
+          [disabled]="!userForm.valid"
+          (click)="onSave()"
+        >
+          Save
+        </button>
+        <button mat-flat-button color="primary" mat-dialog-close>Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
